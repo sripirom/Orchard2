@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using Orchard.Environment;
 using Orchard.Environment.Commands;
@@ -37,7 +38,9 @@ namespace Orchard.Hosting
         {
             services.AddWebHost();
 
-            services.ConfigureShell("Sites");
+            services
+                .AddHostingStateStorage(new PhysicalFileProvider("app_data"))
+                .ConfigureShell("Sites");
 
             services.AddOrchardMvc();
             services.AddModuleFolder("Modules");
