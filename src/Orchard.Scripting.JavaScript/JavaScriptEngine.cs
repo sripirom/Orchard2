@@ -51,8 +51,7 @@ namespace Orchard.Scripting.JavaScript
     }
 
     public class MethodProxy
-    {
-        
+    {        
         public IList<object> Arguments { get; set; }
         public Func<IServiceProvider, IList<object>, object> Callback { get; set; }
         public object Invoke()
