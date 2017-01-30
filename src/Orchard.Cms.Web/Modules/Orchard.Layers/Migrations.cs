@@ -1,29 +1,26 @@
-﻿using Orchard.ContentManagement.Metadata.Settings;
-using Orchard.ContentManagement.MetaData;
-using Orchard.Data.Migration;
+﻿using Orchard.Data.Migration;
+using Orchard.Layers.Indexes;
 
 namespace Orchard.Layers
 {
     public class Migrations : DataMigration
     {
-        IContentDefinitionManager _contentDefinitionManager;
+		public int Create()
+		{
+			SchemaBuilder.CreateMapIndexTable(nameof(LayerMetadataIndex), table => table
+				.Column<string>("Zone", c => c.WithLength(64))
+			);
 
-        public Migrations(IContentDefinitionManager contentDefinitionManager)
-        {
-            _contentDefinitionManager = contentDefinitionManager;
-        }
+			return 1;
+		}
 
-        public int Create()
-        {
-            _contentDefinitionManager.AlterTypeDefinition("Layer", builder => builder
-                .Creatable()
-                .Draftable()
-                .Listable()
-                .WithPart("TitlePart", part => part.WithSetting("Position", "0"))
-                .WithPart("LayerPart", part => part.WithSetting("Position", "10"))
-                );
+		public int UpdateFrom1()
+		{
+			SchemaBuilder.CreateMapIndexTable(nameof(LayerMetadataIndex), table => table
+				.Column<string>("Zone", c => c.WithLength(64))
+			);
 
-            return 1;
-        }
-    }
+			return 2;
+		}
+	}
 }

@@ -1,0 +1,100 @@
+﻿@using Orchard.ContentManagement.Metadata.Settings;
+@model Orchard.Layers.ViewModels.LayersIndexViewModel
+
+@inject IContentManager ContentManager
+@inject Orchard.ContentManagement.MetaData.IContentDefinitionManager ContentDefinitionManager
+@inject Orchard.ContentManagement.Display.IContentItemDisplayManager ContentItemDisplayManager
+
+@{
+    var widgetContentTypes = ContentDefinitionManager.ListTypeDefinitions().Where(t => t.Settings.ToObject<ContentTypeSettings>().Stereotype == "Widget");
+}
+
+<h1>@RenderTitleSegments(T["Edit Widget Layers"])</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <h3>@T["Zones"]</h3>
+        <form asp-action="Index">
+            @foreach (var zone in Model.Zones)
+            {
+                <div class="card">
+                    <div class="card-header text-muted">
+                        @zone
+                    </div>
+                    <div class="layer-zone card-block" data-zone="@zone">
+                        <ul class="list-group">
+                            @if (Model.Widgets.ContainsKey(zone))
+                            {
+                                foreach (var contentItemSummary in Model.Widgets[zone])
+                                {
+                                    contentItemSummary.Attributes.Add("data-layer", contentItemSummary.ContentItem.Content.LayerMetadata.Layer);
+                                    <li class="list-group-item">
+                                        @await DisplayAsync(contentItemSummary)
+                                        <input asp-for="ZoneValues" type="hidden" value="@zone" class="source-zone" />
+                                        <input asp-for="ContentItemIdValues" type="hidden" value="@contentItemSummary.ContentItem.ContentItemId" />
+                                    </li>
+                                }
+                            }
+                        </ul>
+
+                        <div class="btn-group ">
+                            <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                @T["Add Widget"]
+                            </button>
+                            <div class="dropdown-menu">
+                                @foreach (var type in widgetContentTypes)
+                                {
+                                    var contentItem = ContentManager.New(type.Name);
+                                    var createRoute = ContentManager.PopulateAspect<ContentItemMetadata>(contentItem).CreateRouteValues;
+                                    createRoute["returnUrl"] = Context.Request.Path;
+                                    createRoute["LayerMetadata.Zone"] = zone;
+                                    <a class="dropdown-item add-list-widget  btn-sm"
+                                       data-widget-type="@type.Name"
+                                       data-zone="@zone"
+                                       href="@Url.Action((string)createRoute["Action"], (string)createRoute["controller"], createRoute)">@type.DisplayName</a>
+                                }
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            }
+        </form>
+    </div>
+    <div class="col-md-4 col-md-pull-right">
+        <h3>@T["Layers"]</h3>
+        @if (Model.Layers.Any())
+        {
+        <ul class="list-group">
+            @foreach (var layer in Model.Layers)
+            {
+                <li class="list-group-item">
+                    <span>@layer.Name</span>
+                    <div class="float-xs-right">
+                        <a class="btn btn-primary btn-sm" href="@Url.Action("Edit", "Admin", new { area = "Orchard.Layers", name = layer.Name })">@T["Edit"]</a>
+                        <a class="btn btn-danger btn-sm" href="@Url.Action("Delete", "Admin", new { area = "Orchard.Layers", name = layer.Name })" itemprop="RemoveUrl UnsafeUrl">@T["Delete"]</a>
+                    </div>
+                </li>
+            }
+        </ul>
+        }
+        else
+        {
+            <p class="alert alert-warning">@T["Please <a href=\"{0}\">create a layer</a> before adding Widgets", Url.Action("Create", "Admin", new { area = "Orchard.Layers" })]</p>
+        }
+        
+        <a class="button btn-sm" href="@Url.Action("Create", "Admin", new { area = "Orchard.Layers" })">@T["Add"]</a>
+    </div>
+</div>
+
+<script at="Foot">
+    $(".list-group-item").sortable({
+        handle: ".list-group-item",
+        cursor: "move",
+        connectWith: '.list-group-item',
+        receive: function (event, ui) {
+            var newZone = ui.item.closest('.layer-zone').data("zone");
+            var zoneInput = ui.item.find('.source-zone').val(newZone);
+        }
+    });
+</script>

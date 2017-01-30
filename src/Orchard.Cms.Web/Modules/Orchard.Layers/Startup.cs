@@ -1,5 +1,4 @@
 ﻿using System;
-using Layers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Modules;
@@ -10,10 +9,12 @@ using Orchard.ContentManagement.Display.ContentDisplay;
 using Orchard.Data.Migration;
 using Orchard.Environment.Navigation;
 using Orchard.Layers.Drivers;
+using Orchard.Layers.Indexes;
 using Orchard.Layers.Models;
 using Orchard.Layers.Services;
 using Orchard.Scripting;
 using Orchard.Settings.Services;
+using YesSql.Core.Indexes;
 
 namespace Orchard.Layers
 {
@@ -23,14 +24,14 @@ namespace Orchard.Layers
         {
             services.AddScoped<IFilterMetadata, LayerFilter>();
 
-            // Layer Part
-            services.AddScoped<IContentPartDisplayDriver, LayerPartDisplay>();
-            services.AddSingleton<ContentPart, LayerPart>();
-
-            services.AddScoped<ISiteSettingsDisplayDriver, LayerSiteSettingsDisplayDriver>();
+			services.AddScoped<ISiteSettingsDisplayDriver, LayerSiteSettingsDisplayDriver>();
             services.AddSingleton<ContentPart, LayerMetadata>();
-            services.AddScoped<IDataMigration, Migrations>();
-            services.AddScoped<INavigationProvider, AdminMenu>();
+			services.AddScoped<IContentDisplayDriver, LayerMetadataWelder>();
+			services.AddScoped<INavigationProvider, AdminMenu>();
+			services.AddScoped<ILayerService, LayerService>();
+
+			services.AddScoped<IIndexProvider, LayerMetadataIndexProvider>();
+			services.AddScoped<IDataMigration, Migrations>();
         }
 
         public override void Configure(IApplicationBuilder app, IRouteBuilder routes, IServiceProvider serviceProvider)

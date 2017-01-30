@@ -1,66 +1,185 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Localization;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Localization;
 using Orchard.ContentManagement;
 using Orchard.ContentManagement.Display;
 using Orchard.DisplayManagement.ModelBinding;
 using Orchard.Layers.Models;
+using Orchard.Layers.Services;
 using Orchard.Layers.ViewModels;
+using Orchard.Settings;
 
 namespace Orchard.Layers.Controllers
 {
-    public class AdminController : Controller, IUpdateModel
+	public class AdminController : Controller, IUpdateModel
     {
         private readonly IContentManager _contentManager;
         private readonly IContentItemDisplayManager _contentItemDisplayManager;
+        private readonly ISiteService _siteService;
+		private readonly ILayerService _layerService;
 
-        public AdminController(
+		public AdminController(
+			ILayerService layerService,
             IContentManager contentManager,
             IContentItemDisplayManager contentItemDisplayManager,
-            ILogger<AdminController> logger,
-            IHtmlLocalizer<AdminController> localizer
-            )
+            ISiteService siteService,
+			IStringLocalizer<AdminController> s
+			)
         {
-            _contentItemDisplayManager = contentItemDisplayManager;
+			_layerService = layerService;
             _contentManager = contentManager;
+            _contentItemDisplayManager = contentItemDisplayManager;
+            _siteService = siteService;
+			S = s;
+		}
 
-            T = localizer;
-            Logger = logger;
-        }
+		public IStringLocalizer S { get; }
 
-        public IHtmlLocalizer T { get; }
-        public dynamic New { get; set; }
-
-        public ILogger Logger { get; set; }
-        
-        public async Task<IActionResult> BuildEditor(string id, string prefix, string prefixesName, string contentTypesName, string zonesName, string zone, string targetId)
+		public async Task<IActionResult> Index()
         {
-            if (String.IsNullOrWhiteSpace(id))
+			var layers = await _layerService.GetLayersAsync();
+			var widgets = await _layerService.GetLayerWidgetsAsync(c => c.Latest == true);
+
+			var model = new LayersIndexViewModel { Layers = layers.Layers };
+
+            model.Zones = (await _siteService.GetSiteSettingsAsync()).As<LayerSettings>()?.Zones ?? Array.Empty<string>();
+
+            model.Widgets = new Dictionary<string, List<dynamic>>();
+
+            foreach (var widget in widgets.OrderBy(x => x.Position))
             {
-                return NotFound();
+				var zone = widget.Zone;
+				List <dynamic> list;
+				if (!model.Widgets.TryGetValue(zone, out list))
+				{
+					model.Widgets.Add(zone, list = new List<dynamic>());
+				}
+
+                list.Add(await _contentItemDisplayManager.BuildDisplayAsync(widget.ContentItem, this, "SummaryAdmin"));
             }
 
-            var contentItem = _contentManager.New(id);
-
-            contentItem.Weld(new LayerMetadata());
-
-            var editor = await _contentItemDisplayManager.BuildEditorAsync(contentItem, this, htmlFieldPrefix: prefix);
-
-            editor.ZonesName = zonesName;
-            editor.PrefixesName = prefixesName;
-            editor.ContentTypesName = contentTypesName;
-            editor.TargetId = targetId;
-            editor.Zone = zone;
-            editor.Inline = true;
-
-            var model = new BuildEditorViewModel
-            {
-                EditorShape = editor
-            };
-
-            return View("Display", model);
+            return View(model);
         }
-    }
+
+        [HttpPost]
+        public IActionResult Index(LayersIndexViewModel model)
+        {
+            return RedirectToAction("Index");
+        }
+
+		public IActionResult Create()
+		{
+			return View();
+		}
+
+		[HttpPost, ActionName("Create")]
+		public async Task<IActionResult> CreatePost(LayerEditViewModel model)
+		{
+			var layers = await _layerService.GetLayersAsync();
+
+			ValidateViewModel(model, layers, isNew: true);
+
+			if (ModelState.IsValid)
+			{
+				layers.Layers.Add(new Layer
+				{
+					Name = model.Name,
+					Rule = model.Rule,
+					Description = model.Description
+				});
+
+				await _layerService.UpdateAsync(layers);
+
+				return RedirectToAction("Index");
+			}
+
+			return View(model);			
+		}
+
+		public async Task<IActionResult> Edit(string name)
+		{
+			var layers = await _layerService.GetLayersAsync();
+
+			var layer = layers.Layers.FirstOrDefault(x => String.Equals(x.Name, name));
+
+			if (layer == null)
+			{
+				return NotFound();
+			}
+
+			var model = new LayerEditViewModel
+			{
+				Name = layer.Name,
+				Rule = layer.Rule,
+				Description = layer.Description
+			};
+
+			return View(model);
+		}
+
+		[HttpPost, ActionName("Edit")]
+		public async Task<IActionResult> EditPost(LayerEditViewModel model)
+		{
+			var layers = await _layerService.GetLayersAsync();
+
+			ValidateViewModel(model, layers, isNew: false);
+
+			if (ModelState.IsValid)
+			{
+				var layer = layers.Layers.FirstOrDefault(x => String.Equals(x.Name, model.Name));
+
+				if (layer == null)
+				{
+					return NotFound();
+				}
+
+				layer.Name = model.Name;
+				layer.Rule = model.Rule;
+				layer.Description = model.Description;
+
+				await _layerService.UpdateAsync(layers);
+
+				return RedirectToAction("Index");
+			}
+
+			return View(model);
+		}
+
+		[HttpPost]
+		public async Task<IActionResult> Delete(string name)
+		{
+			var layers = await _layerService.GetLayersAsync();
+
+			var layer = layers.Layers.FirstOrDefault(x => String.Equals(x.Name, name));
+
+			if (layer == null)
+			{
+				return NotFound();
+			}
+
+			layers.Layers.Remove(layer);
+
+			return RedirectToAction("Index");
+		}
+
+		private void ValidateViewModel(LayerEditViewModel model, LayersDocument layers, bool isNew)
+		{
+			if (String.IsNullOrWhiteSpace(model.Name))
+			{
+				ModelState.AddModelError(nameof(LayerEditViewModel.Name), S["The layer name is required."]);
+			}
+			else if (isNew && layers.Layers.Any(x => String.Equals(x.Name, model.Name, StringComparison.OrdinalIgnoreCase)))
+			{
+				ModelState.AddModelError(nameof(LayerEditViewModel.Name), S["The layer name already exists."]);
+			}
+
+			if (String.IsNullOrWhiteSpace(model.Rule))
+			{
+				ModelState.AddModelError(nameof(LayerEditViewModel.Rule), S["The rule is required."]);
+			}
+		}
+	}
 }

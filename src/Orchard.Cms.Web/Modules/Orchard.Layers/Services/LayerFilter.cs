@@ -5,33 +5,27 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Caching.Memory;
 using Orchard.Admin;
-using Orchard.ContentManagement;
 using Orchard.ContentManagement.Display;
-using Orchard.ContentManagement.Records;
 using Orchard.DisplayManagement.Layout;
 using Orchard.DisplayManagement.ModelBinding;
 using Orchard.Environment.Cache;
-using Orchard.Layers.Handlers;
-using Orchard.Layers.Models;
 using Orchard.Scripting;
 using Orchard.Utility;
-using YesSql.Core.Services;
 
 namespace Orchard.Layers.Services
 {
-    public class LayerFilter : IAsyncResultFilter
+	public class LayerFilter : IAsyncResultFilter
     {
         private readonly ILayoutAccessor _layoutAccessor;
-        private readonly ISession _session;
         private readonly IContentItemDisplayManager _contentItemDisplayManager;
         private readonly IModelUpdaterAccessor _modelUpdaterAccessor;
         private readonly IScriptingManager _scriptingManager;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IMemoryCache _memoryCache;
         private readonly ISignal _signal;
+		private readonly ILayerService _layerService;
 
-        public LayerFilter(
-            ISession session,
+		public LayerFilter(
+			ILayerService layerService,
             ILayoutAccessor layoutAccessor,
             IContentItemDisplayManager contentItemDisplayManager,
             IModelUpdaterAccessor modelUpdaterAccessor,
@@ -40,76 +34,59 @@ namespace Orchard.Layers.Services
             IMemoryCache memoryCache,
             ISignal signal)
         {
-            _session = session;
-            _layoutAccessor = layoutAccessor;
+			_layerService = layerService;
+			_layoutAccessor = layoutAccessor;
             _contentItemDisplayManager = contentItemDisplayManager;
             _modelUpdaterAccessor = modelUpdaterAccessor;
             _scriptingManager = scriptingManager;
             _serviceProvider = serviceProvider;
-            _memoryCache = memoryCache;
             _signal = signal;
         }
 
         public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
         {
-            // Should only run on the front-end for a full view
-            if (context.Result is ViewResult && !AdminAttribute.IsApplied(context.HttpContext))
-            {
-                var layerParts = await _memoryCache.GetOrCreateAsync("Orchard.Layers:Layers", async entry =>
-                {
-                    entry.AddExpirationToken(_signal.GetToken(LayerHandler.LayerChangeToken));
-                    
-                    var layers = await _session.QueryAsync<ContentItem, ContentItemIndex>(x => x.ContentType == "Layer" && x.Published).List();
+			// Should only run on the front-end for a full view
+			if (context.Result is ViewResult && !AdminAttribute.IsApplied(context.HttpContext))
+			{
+				var widgets = await _layerService.GetLayerWidgetsAsync(x => x.Published);
+				var layers = await _layerService.GetLayersAsync();
 
-                    // Apply layers in order
-                    return layers
-                        .Select(x => x.As<LayerPart>())
-                        .Where(x => x != null)
-                        .OrderBy(x => x.Order);
-                });
+				var layout = _layoutAccessor.GetLayout();
+				var updater = _modelUpdaterAccessor.ModelUpdater;
 
-                var layout = _layoutAccessor.GetLayout();
-                var updater = _modelUpdaterAccessor.ModelUpdater;
+				var engine = _scriptingManager.GetScriptingEngine("js");
+				var scope = engine.CreateScope(_scriptingManager.GlobalMethodProviders.SelectMany(x => x.GetMethods()), _serviceProvider);
 
-                var engine = _scriptingManager.GetScriptingEngine("js");
-                var scope = engine.CreateScope(_scriptingManager.GlobalMethodProviders.SelectMany(x => x.GetMethods()), _serviceProvider);
+				foreach (var layer in layers.Layers)
+				{
+					if (String.IsNullOrEmpty(layer.Rule))
+					{
+						continue;
+					}
 
-                foreach (var layerPart in layerParts)
-                {
-                    if (String.IsNullOrEmpty(layerPart.Rule))
-                    {
-                        continue;
-                    }
+					var display = Convert.ToBoolean(engine.Evaluate(scope, layer.Rule));
 
-                    var display = Convert.ToBoolean(engine.Evaluate(scope, layerPart.Rule));
+					if (!display)
+					{
+						continue;
+					}
 
-                    if (!display)
-                    {
-                        continue;
-                    }
+					foreach (var widget in widgets)
+					{
+						if (widget.Layer != layer.Name) continue;
 
-                    foreach (var zone in layerPart.Widgets.Keys)
-                    {
-                        foreach (var widget in layerPart.Widgets[zone])
-                        {
-                            var layerMetadata = widget.As<LayerMetadata>();
+						var widgetContent = await _contentItemDisplayManager.BuildDisplayAsync(widget.ContentItem, updater);
 
-                            if (layerMetadata != null)
-                            {
-                                var widgetContent = await _contentItemDisplayManager.BuildDisplayAsync(widget, updater);
+						widgetContent.Classes.Add("widget");
+						widgetContent.Classes.Add("widget-" + widget.ContentItem.ContentType.HtmlClassify());
 
-                                widgetContent.Classes.Add("widget");
-                                widgetContent.Classes.Add("widget-" + widget.ContentItem.ContentType.HtmlClassify());
+						var contentZone = layout.Zones[widget.Zone];
+						contentZone.Add(widgetContent);
+					}
+				}
+			}
 
-                                var contentZone = layout.Zones[zone];
-                                contentZone.Add(widgetContent);
-                            }
-                        }
-                    }
-                }
-            }
-
-            await next.Invoke();
+			await next.Invoke();
         }
     }
 }

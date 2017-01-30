@@ -3,7 +3,7 @@ using Microsoft.Extensions.Localization;
 using Orchard.Environment.Navigation;
 using Orchard.Layers.Drivers;
 
-namespace Layers
+namespace Orchard.Layers
 {
     public class AdminMenu : INavigationProvider
     {
@@ -24,10 +24,15 @@ namespace Layers
             builder
                 .Add(T["Design"], design => design
                     .Add(T["Settings"], settings => settings
-                        .Add(T["Layers"], T["Layers"], entry => entry
+                        .Add(T["Layers"], T["Layers"], layers => layers
                             .Action("Index", "Admin", new { area = "Orchard.Settings", groupId = LayerSiteSettingsDisplayDriver.GroupId })
                             .LocalNav()
-                        )));
+                        )))
+                .Add(T["Content"], design => design
+                    .Add(T["Layers"], layers => layers
+                        .Action("Index", "Admin", new { area = "Orchard.Layers" })
+                        .LocalNav()
+                    ));
         }
     }
 }
