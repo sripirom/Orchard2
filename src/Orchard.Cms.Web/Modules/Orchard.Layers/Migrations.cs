@@ -13,14 +13,5 @@ namespace Orchard.Layers
 
 			return 1;
 		}
-
-		public int UpdateFrom1()
-		{
-			SchemaBuilder.CreateMapIndexTable(nameof(LayerMetadataIndex), table => table
-				.Column<string>("Zone", c => c.WithLength(64))
-			);
-
-			return 2;
-		}
 	}
 }

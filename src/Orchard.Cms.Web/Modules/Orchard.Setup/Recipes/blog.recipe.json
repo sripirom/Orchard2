@@ -78,7 +78,7 @@
         "ContentItemId": "[js: variables('blogContentItemId')]"
       },
       "LayerSettings": {
-        "Zones": ["Content", "Footer"]
+        "Zones": [ "Content", "Footer" ]
       }
     },
     {
@@ -744,47 +744,38 @@
         },
         {
           "ContentItemId": "[js: uuid()]",
-          "ContentType": "Layer",
+          "ContentType": "RawHtml",
           "Latest": true,
           "Published": true,
           "Owner": "[js: parameters('AdminUsername')]",
           "Author": "[js: parameters('AdminUsername')]",
-          "Page": {
-            "Subtitle": {
-              "Text": "This is what I do"
-            },
-            "HeaderImageUrl": {
-              "Text": "https://raw.githubusercontent.com/BlackrockDigital/startbootstrap-clean-blog/master/img/about-bg.jpg"
+          "LayerMetadata": {
+            "Title": "Copyright",
+            "Layer": "Always",
+            "Zone": "Footer",
+            "RenderTitle": false,
+            "Position": 10
+          },
+          "RawHtml": {
+            "Content": {
+              "Html": "<!-- This widget is configured in the layers section -->\n<div class=\"col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1\">\n    <ul class=\"list-inline text-center\">\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-twitter fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-facebook fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-github fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n    </ul>\n    <p class=\"copyright text-muted\">Copyright ©</p></div>"
             }
-          },
-          "AutoroutePart": {
-            "Path": "about",
-            "SetHomepage": false
-          },
-          "LayerPart": {
-            "Rule": "true",
-            "Order": 0,
-            "Widgets": {
-              "Footer": [
-                {
-                  "ContentItemId": "[js: uuid()]",
-                  "ContentType": "RawHtml",
-                  "RawHtml": {
-                    "Content": {
-                      "Html": "<!-- This widget is configured in the Global Widgets layer --><div class=\"col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1\">\n    <ul class=\"list-inline text-center\">\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-twitter fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-facebook fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n        <li>\n            <a href=\"#\">\n                <span class=\"fa-stack fa-lg\">\n                    <i class=\"fa fa-circle fa-stack-2x\"></i>\n                    <i class=\"fa fa-github fa-stack-1x fa-inverse\"></i>\n                </span>\n            </a>\n        </li>\n    </ul>\n    <p class=\"copyright text-muted\">Copyright ©</p></div>"
-                    }
-                  },
-                  "LayerMetadata": {
-                    "RenderTitle": false,
-                    "Position": null
-                  }
-                }
-              ]
-            }
-          },
-          "TitlePart": {
-            "Title": "Global Widgets"
           }
+        }
+      ]
+    },
+    {
+      "name": "layers",
+      "Layers": [
+        {
+          "Name": "Always",
+          "Rule": "true",
+          "Description": "The widgets in this layer are displayed on any page of this site."
+        },
+        {
+          "Name": "Homepage",
+          "Rule": "isHomepage()",
+          "Description": "The widgets in this layer are only displayed o the homepage."
         }
       ]
     }

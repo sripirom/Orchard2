@@ -13,7 +13,9 @@ using Orchard.Layers.Drivers;
 using Orchard.Layers.Handlers;
 using Orchard.Layers.Indexes;
 using Orchard.Layers.Models;
+using Orchard.Layers.Recipes;
 using Orchard.Layers.Services;
+using Orchard.Recipes;
 using Orchard.Scripting;
 using Orchard.Security.Permissions;
 using Orchard.Settings.Services;
@@ -36,7 +38,8 @@ namespace Orchard.Layers
 			services.AddScoped<IIndexProvider, LayerMetadataIndexProvider>();
 			services.AddScoped<IDataMigration, Migrations>();
 			services.AddScoped<IPermissionProvider, Permissions>();
-        }
+			services.AddRecipeExecutionStep<LayerStep>();
+		}
 
         public override void Configure(IApplicationBuilder app, IRouteBuilder routes, IServiceProvider serviceProvider)
         {
