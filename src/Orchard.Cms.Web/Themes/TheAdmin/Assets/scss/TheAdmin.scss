@@ -262,8 +262,12 @@ ul.pager li a {
 // Sortable
 // ------------------------------
 
-.list-group.sortable li {
+.ui-sortable-handle {
     cursor: move;
+}
+
+.ui-sortable {
+    min-height: $font-size-root;
 }
 
 // Responsive sizes

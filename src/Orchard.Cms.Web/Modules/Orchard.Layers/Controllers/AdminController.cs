@@ -2,15 +2,19 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Localization;
 using Orchard.ContentManagement;
 using Orchard.ContentManagement.Display;
 using Orchard.DisplayManagement.ModelBinding;
+using Orchard.Environment.Cache;
+using Orchard.Layers.Handlers;
 using Orchard.Layers.Models;
 using Orchard.Layers.Services;
 using Orchard.Layers.ViewModels;
 using Orchard.Settings;
+using YesSql.Core.Services;
 
 namespace Orchard.Layers.Controllers
 {
@@ -20,8 +24,14 @@ namespace Orchard.Layers.Controllers
         private readonly IContentItemDisplayManager _contentItemDisplayManager;
         private readonly ISiteService _siteService;
 		private readonly ILayerService _layerService;
+		private readonly IAuthorizationService _authorizationService;
+		private readonly ISession _session;
+		private readonly ISignal _signal;
 
 		public AdminController(
+			ISignal signal,
+			IAuthorizationService authorizationService,
+			ISession session,
 			ILayerService layerService,
             IContentManager contentManager,
             IContentItemDisplayManager contentItemDisplayManager,
@@ -29,6 +39,9 @@ namespace Orchard.Layers.Controllers
 			IStringLocalizer<AdminController> s
 			)
         {
+			_signal = signal;
+			_authorizationService = authorizationService;
+			_session = session;
 			_layerService = layerService;
             _contentManager = contentManager;
             _contentItemDisplayManager = contentItemDisplayManager;
@@ -40,6 +53,11 @@ namespace Orchard.Layers.Controllers
 
 		public async Task<IActionResult> Index()
         {
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			var layers = await _layerService.GetLayersAsync();
 			var widgets = await _layerService.GetLayerWidgetsAsync(c => c.Latest == true);
 
@@ -65,19 +83,34 @@ namespace Orchard.Layers.Controllers
         }
 
         [HttpPost]
-        public IActionResult Index(LayersIndexViewModel model)
+        public async Task<IActionResult> Index(LayersIndexViewModel model)
         {
-            return RedirectToAction("Index");
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
+			return RedirectToAction("Index");
         }
 
-		public IActionResult Create()
+		public async Task<IActionResult> Create()
 		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			return View();
 		}
 
 		[HttpPost, ActionName("Create")]
 		public async Task<IActionResult> CreatePost(LayerEditViewModel model)
 		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			var layers = await _layerService.GetLayersAsync();
 
 			ValidateViewModel(model, layers, isNew: true);
@@ -101,6 +134,11 @@ namespace Orchard.Layers.Controllers
 
 		public async Task<IActionResult> Edit(string name)
 		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			var layers = await _layerService.GetLayersAsync();
 
 			var layer = layers.Layers.FirstOrDefault(x => String.Equals(x.Name, name));
@@ -123,6 +161,11 @@ namespace Orchard.Layers.Controllers
 		[HttpPost, ActionName("Edit")]
 		public async Task<IActionResult> EditPost(LayerEditViewModel model)
 		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			var layers = await _layerService.GetLayersAsync();
 
 			ValidateViewModel(model, layers, isNew: false);
@@ -151,6 +194,11 @@ namespace Orchard.Layers.Controllers
 		[HttpPost]
 		public async Task<IActionResult> Delete(string name)
 		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return Unauthorized();
+			}
+
 			var layers = await _layerService.GetLayersAsync();
 
 			var layer = layers.Layers.FirstOrDefault(x => String.Equals(x.Name, name));
@@ -163,6 +211,49 @@ namespace Orchard.Layers.Controllers
 			layers.Layers.Remove(layer);
 
 			return RedirectToAction("Index");
+		}
+
+		[HttpPost]
+		public async Task<IActionResult> UpdatePosition(string contentItemId, double position, string zone)
+		{
+			if (!await _authorizationService.AuthorizeAsync(User, Permissions.ManageLayers))
+			{
+				return StatusCode(401);
+			}
+
+			// Load the latest version first if any
+			var contentItem = await _contentManager.GetAsync(contentItemId, VersionOptions.Latest);
+
+			if (contentItem == null)
+			{
+				return StatusCode(404);
+			}
+
+			var layerMetadata = contentItem.As<LayerMetadata>();
+
+			if (layerMetadata == null)
+			{
+				return StatusCode(403);
+			}
+
+			layerMetadata.Position = position;
+			layerMetadata.Zone = zone;
+
+			contentItem.Apply(layerMetadata);
+
+			_session.Save(contentItem);
+
+			// Clear the cache
+			_signal.SignalToken(LayerMetadataHandler.LayerChangeToken);
+			
+			if (Request.Headers != null && Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+			{
+				return StatusCode(200); 
+			}
+			else
+			{
+				return RedirectToAction("Index");
+			}			
 		}
 
 		private void ValidateViewModel(LayerEditViewModel model, LayersDocument layers, bool isNew)

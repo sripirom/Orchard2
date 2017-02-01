@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Orchard.ContentManagement;
 using Orchard.ContentManagement.Records;
+using Orchard.Environment.Cache;
+using Orchard.Layers.Handlers;
 using Orchard.Layers.Indexes;
 using Orchard.Layers.Models;
 using YesSql.Core.Services;
@@ -16,13 +18,16 @@ namespace Orchard.Layers.Services
 	{
 		private readonly IMemoryCache _memoryCache;
 		private readonly ISession _session;
+		private readonly ISignal _signal;
 
 		private const string LayersCacheKey = "LayersDocument";
 
 		public LayerService(
+			ISignal signal,
 			ISession session,
 			IMemoryCache memoryCache)
 		{
+			_signal = signal;
 			_session = session;
 			_memoryCache = memoryCache;
 		}
@@ -59,12 +64,21 @@ namespace Orchard.Layers.Services
 
 		public async Task<IEnumerable<LayerMetadata>> GetLayerWidgetsAsync(Expression<Func<ContentItemIndex, bool>> predicate)
 		{
-			var allWidgets = await _session
+			return await _memoryCache.GetOrCreateAsync("Orchard.Layers:Layers" + predicate.ToString(), async entry =>
+			{
+				entry.AddExpirationToken(_signal.GetToken(LayerMetadataHandler.LayerChangeToken));
+
+				var allWidgets = await _session
 				.QueryAsync<ContentItem, LayerMetadataIndex>()
 				.With(predicate)
 				.List();
 
-			return allWidgets.Select(x => x.As<LayerMetadata>()).Where(x => x != null).ToList();
+				return allWidgets
+					.Select(x => x.As<LayerMetadata>())
+					.Where(x => x != null)
+					.OrderBy(x => x.Position)
+					.ToList();
+			});			
 		}
 
 		public async Task UpdateAsync(LayersDocument layers)

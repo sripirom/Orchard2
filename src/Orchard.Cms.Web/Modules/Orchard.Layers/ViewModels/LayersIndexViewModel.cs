@@ -6,9 +6,6 @@ namespace Orchard.Layers.ViewModels
 {
     public class LayersIndexViewModel
     {
-        public string[] ZoneValues { get; set; }
-        public string[] ContentItemIdValues { get; set; }
-
         [BindNever]
         public string[] Zones { get; set; }
 

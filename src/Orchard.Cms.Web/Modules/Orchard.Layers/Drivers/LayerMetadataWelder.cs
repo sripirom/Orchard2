@@ -56,7 +56,7 @@ namespace Orchard.Layers.Drivers
                 return null;
             }
 
-			model.Weld(layerMetadata);
+			model.Apply(layerMetadata);
 
 			return await EditAsync(model, context);
         }

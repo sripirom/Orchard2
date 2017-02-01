@@ -8,8 +8,21 @@
 @{
     var widgetContentTypes = ContentDefinitionManager.ListTypeDefinitions().Where(t => t.Settings.ToObject<ContentTypeSettings>().Stereotype == "Widget");
 }
+<script asp-name="jquery-ui" at="Foot"></script>
 
 <h1>@RenderTitleSegments(T["Edit Widget Layers"])</h1>
+
+<form id="undo-form" asp-action="UpdatePosition" method="post">
+    <div id="layer-undo-message" class="message message-success message-dismissible show hidden-xs-up" role="alert">
+        <button type="button" class="close" data-dismiss="message" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+       @T["Widget successfully moved. <a href=\"javascript:console.log('submit');$('#undo-form').submit();\"><strong>Undo</strong></a>."]
+    </div>
+    <input id="layer-undo-message-contentItemId" type="hidden" name="contentItemId" value="" />
+    <input id="layer-undo-message-zone" type="hidden" name="zone" value="" />
+    <input id="layer-undo-message-position" type="hidden" name="position" value="" />
+</form>
 
 <div class="row">
     <div class="col-md-8">
@@ -17,25 +30,36 @@
         <form asp-action="Index">
             @foreach (var zone in Model.Zones)
             {
+                double maxPosition = 0;
+
                 <div class="card">
                     <div class="card-header text-muted">
                         @zone
                     </div>
                     <div class="layer-zone card-block" data-zone="@zone">
-                        <ul class="list-group">
-                            @if (Model.Widgets.ContainsKey(zone))
-                            {
-                                foreach (var contentItemSummary in Model.Widgets[zone])
+                        <div class="form-group">
+                            <ul class="list-group">
+                                @if (Model.Widgets.ContainsKey(zone))
                                 {
-                                    contentItemSummary.Attributes.Add("data-layer", contentItemSummary.ContentItem.Content.LayerMetadata.Layer);
-                                    <li class="list-group-item">
-                                        @await DisplayAsync(contentItemSummary)
-                                        <input asp-for="ZoneValues" type="hidden" value="@zone" class="source-zone" />
-                                        <input asp-for="ContentItemIdValues" type="hidden" value="@contentItemSummary.ContentItem.ContentItemId" />
-                                    </li>
+                                    foreach (var contentItemSummary in Model.Widgets[zone])
+                                    {
+                                        contentItemSummary.Meta.Add(Html.Raw("<span class=\"tag tag-info\"><i class=\"fa fa-check\" aria-hidden=\"true\"></i>" + contentItemSummary.ContentItem.Content.LayerMetadata.Layer + "</span>"));
+
+                                        maxPosition = Math.Max(maxPosition, (double)contentItemSummary.ContentItem.Content.LayerMetadata.Position);
+                                        <li class="list-group-item" >
+                                            @await DisplayAsync(contentItemSummary)
+                                            <input type="hidden" 
+                                                   class="layer-metadata" 
+                                                   data-zone="@zone"
+                                                   data-layer="@contentItemSummary.ContentItem.Content.LayerMetadata.Layer"
+                                                   data-position="@contentItemSummary.ContentItem.Content.LayerMetadata.Position"
+                                                   data-content-item-id="@contentItemSummary.ContentItem.ContentItemId" 
+                                            />
+                                        </li>
+                                    }
                                 }
-                            }
-                        </ul>
+                            </ul>
+                        </div>
 
                         <div class="btn-group ">
                             <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -48,6 +72,7 @@
                                     var createRoute = ContentManager.PopulateAspect<ContentItemMetadata>(contentItem).CreateRouteValues;
                                     createRoute["returnUrl"] = Context.Request.Path;
                                     createRoute["LayerMetadata.Zone"] = zone;
+                                    createRoute["LayerMetadata.Position"] = maxPosition + 1;
                                     <a class="dropdown-item add-list-widget  btn-sm"
                                        data-widget-type="@type.Name"
                                        data-zone="@zone"
@@ -63,22 +88,31 @@
     </div>
     <div class="col-md-4 col-md-pull-right">
         <h3>@T["Layers"]</h3>
-        @if (Model.Layers.Any())
-        {
-        <ul class="list-group">
-            @foreach (var layer in Model.Layers)
-            {
-                <li class="list-group-item">
-                    <span>@layer.Name</span>
-                    <div class="float-xs-right">
-                        <a class="btn btn-primary btn-sm" href="@Url.Action("Edit", "Admin", new { area = "Orchard.Layers", name = layer.Name })">@T["Edit"]</a>
-                        <a class="btn btn-danger btn-sm" href="@Url.Action("Delete", "Admin", new { area = "Orchard.Layers", name = layer.Name })" itemprop="RemoveUrl UnsafeUrl">@T["Delete"]</a>
-                    </div>
-                </li>
-            }
-        </ul>
-        }
-        else
+        <p>
+            <span class="hint">@T["Select a layer to reveal its associated widgets."]</span>
+        </p>
+        <div class="form-group">
+            <ul class="list-group">
+                @foreach (var layer in Model.Layers)
+                {
+                    <li class="list-group-item">
+                        <div class="float-xs-right">
+                            <a class="btn btn-primary btn-sm" href="@Url.Action("Edit", "Admin", new { area = "Orchard.Layers", name = layer.Name })">@T["Edit"]</a>
+                            <a class="btn btn-danger btn-sm" href="@Url.Action("Delete", "Admin", new { area = "Orchard.Layers", name = layer.Name })" itemprop="RemoveUrl UnsafeUrl">@T["Delete"]</a>
+                        </div>
+                            
+                        <div>
+                            <label>
+                                <input type="checkbox" class="layer-check" value="@layer.Name">
+                                @layer.Name
+                            </label>
+                        </div>
+                        <span class="hint">@layer.Description</span>
+                    </li>
+                }
+            </ul>
+        </div>
+        @if (!Model.Layers.Any())
         {
             <p class="alert alert-warning">@T["Please <a href=\"{0}\">create a layer</a> before adding Widgets", Url.Action("Create", "Admin", new { area = "Orchard.Layers" })]</p>
         }
@@ -88,13 +122,66 @@
 </div>
 
 <script at="Foot">
-    $(".list-group-item").sortable({
-        handle: ".list-group-item",
+    $(".list-group").sortable({
+        handle: ".properties",
         cursor: "move",
-        connectWith: '.list-group-item',
-        receive: function (event, ui) {
+        connectWith: '.list-group',
+        stop: function (event, ui) {
             var newZone = ui.item.closest('.layer-zone').data("zone");
-            var zoneInput = ui.item.find('.source-zone').val(newZone);
+            var metadata = ui.item.find('.layer-metadata')
+            var currentPosition = Number(metadata.data("position"));
+            var item = ui.item.closest('.list-group-item');
+            var previous = item.prev('.list-group-item').find('.layer-metadata');
+            var next = item.next('.list-group-item').find('.layer-metadata');
+            var contentItemId = metadata.data("content-item-id");
+
+            var newPosition = currentPosition;
+
+            if (previous.length == 0 && next.length == 0) {
+                // we can keep the current position
+            }
+            else if (previous.length == 0 && next.length > 0) {
+                // first in the list
+                newPosition = Number(next.data("position") || 0) - 1;
+            }
+            else if (previous.length > 0 && next.length == 0) {
+                // last in the list
+                newPosition = Number(previous.data("position") || 0) + 1;
+            }
+            else {
+                newPosition = (Number(previous.data("position") || 0) + Number(next.data("position") || 0)) / 2;
+            }
+
+            var currentZone = metadata.data("zone");
+            var currentPosition = metadata.data("position");
+
+            metadata.data("zone", newZone);
+            metadata.data("position", newPosition);
+
+            var url = "@Url.Action("UpdatePosition", "Admin", new { area = "Orchard.Layers" })" + "?" + "contentItemId=" + encodeURIComponent(contentItemId) + "&position=" + encodeURIComponent(newPosition) + "&zone=" + encodeURIComponent(newZone);
+            var antiforgerytoken = $("[name='__RequestVerificationToken']").val();
+
+            $.post(url, { "__RequestVerificationToken": antiforgerytoken })
+                .done(function () {
+                    console.log('done');
+                    $('#layer-undo-message').removeClass("hidden-xs-up");
+                    $('#layer-undo-message-contentItemId').val(contentItemId);
+                    $('#layer-undo-message-position').val(currentPosition);
+                    $('#layer-undo-message-zone').val(currentZone);
+                })
+                .fail(function () {
+                    console.log('failed');
+                    $('#layer-undo-message').addClass("hidden-xs-up");
+                })
+            ;
         }
+    });
+
+    $('.layer-check').on('click', function () {
+        $('.list-group-item').removeClass('list-group-item-success');
+        $('.layer-check:checked').each(function () {
+            var layer = $(this).val();
+            $('[data-layer="' + layer + '"]').closest('.list-group-item').addClass('list-group-item-success');
+        });
     });
 </script>
